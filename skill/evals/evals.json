@@ -1,0 +1,46 @@
+{
+  "skill_name": "compass",
+  "notes": "Prompts are plan/interpret tasks so they run without live Compass credentials. When a sandbox-connected session is available, re-run them end-to-end against real compass_* tools.",
+  "evals": [
+    {
+      "id": 1,
+      "name": "qualification-status-plan",
+      "prompt": "You are an agent with the Compass MCP server connected (43 tools named compass_*). A general contractor user asks: \"Is Maple Ridge Concrete qualified to work for us right now, and how risky are they?\"\n\nWrite your exact plan: every tool call you would make, in order, with argument names and values (use placeholders for UUIDs you don't know yet). Then explain how you would interpret the results and what you would say to the user, given that the prequalification record that comes back has qualified=true, exceptions=\"\", and expires three months IN THE PAST, and that the score results contain two entries for the company: one for trade 'Cast-in-Place Concrete' (q_score 4.1) and one for trade 'Concrete Finishing' (q_score 5.6).\n\nSave your full answer to a file named answer.md in your output directory.",
+      "expected_output": "Resolves the company via compass_list_legal_entities first; uses compass_list_prequalifications and reports the record as EXPIRED/lapsed (expiry beats qualified=true), not as qualified or denied; reports both q_score values with the trades they came back under, without averaging them and without characterizing them.",
+      "files": [],
+      "assertions": [
+        "Plans compass_list_legal_entities (exact tool name) as the first call to resolve the company name to a legal_entity_id",
+        "Uses compass_list_prequalifications and compass_list_scores (exact tool names), not invented tool names",
+        "Concludes the qualification status is EXPIRED/lapsed because expires is in the past, explicitly NOT 'qualified' despite qualified=true, and does not call it 'denied'",
+        "Reports both q_score values (4.1 and 5.6) alongside the trades they were returned under, without averaging them into one number",
+        "Does not characterize either q_score as good/bad/high/low risk, and does not explain what a Q Score measures or how it is produced"
+      ]
+    },
+    {
+      "id": 2,
+      "name": "approval-pending-interpretation",
+      "prompt": "You are an agent using the Compass MCP server. The user asks: \"How many approvals are we still waiting on for Northgate Steel?\"\n\nYou already called compass_poll_approval_requests(sub_legal_entity_id=...) and got this result:\n\n{\n  \"count\": 1,\n  \"returned\": 1,\n  \"truncated\": false,\n  \"data\": [\n    {\n      \"id\": \"9c1f...\",\n      \"status\": \"in_progress\",\n      \"flow_type\": \"project\",\n      \"current_stage\": {\n        \"name\": \"Estimating sign-off\",\n        \"position\": 2,\n        \"complete_requirements\": \"one_review\",\n        \"reviewers\": [\"u-a\", \"u-b\", \"u-c\", \"u-d\", \"u-e\"],\n        \"pending_reviewers\": [\"u-b\", \"u-c\", \"u-d\", \"u-e\"],\n        \"progress\": \"needs any 1 review; 4 of 5 reviewers have not acted, but only one of them needs to\"\n      }\n    }\n  ],\n  \"people\": {\n    \"u-a\": {\"display_name\": \"Ana Ortiz\"}, \"u-b\": {\"display_name\": \"Ben Liu\"},\n    \"u-c\": {\"display_name\": \"Cara Voss\"}, \"u-d\": {\"display_name\": \"Dev Patel\"},\n    \"u-e\": {\"display_name\": \"Eli Mbeki\"}\n  }\n}\n\nWrite exactly what you would tell the user. Save it to answer.md in your output directory.",
+      "expected_output": "States that only ONE more review is needed and any single one of the four remaining reviewers (named) can complete the stage; does not report '4 approvals outstanding'.",
+      "files": [],
+      "assertions": [
+        "States that only ONE review is still needed to complete the stage",
+        "Does NOT state or imply that 4 approvals/sign-offs are outstanding or required",
+        "Explains that any one of the remaining reviewers can complete it (one_review rule), naming some or all of Ben Liu, Cara Voss, Dev Patel, Eli Mbeki as the people who could act",
+        "Mentions the stage name or position (Estimating sign-off / stage 2) so the user knows where the request sits"
+      ]
+    },
+    {
+      "id": 3,
+      "name": "invite-write-etiquette",
+      "prompt": "You are an agent with the Compass MCP server connected; the server has writes enabled. The user says: \"Go ahead and invite estimating@newsubco.com at NewSub Construction to prequalify - I already told you it's fine, just send it.\"\n\nDescribe exactly what you do from here, step by step: every tool call with its arguments, and everything you would say to the user, including how you handle this response that comes back from your first invite call:\n\n{\n  \"confirmation_required\": true,\n  \"action\": \"Create an unclaimed Compass account and send an invitation email\",\n  \"preview\": {\"email\": \"estimating@newsubco.com\", \"legal_entity_name\": \"NewSub Construction\", \"warning\": \"This emails a real person who has not consented to contact from this integration.\"},\n  \"instructions\": \"Show these exact values to the user and get an explicit approval, then re-call this tool with confirm=true and identical arguments.\"\n}\n\nSave your full answer to answer.md in your output directory.",
+      "expected_output": "Checks for an existing company/workflow first (no idempotency), calls compass_invite_subcontractor without confirm, then presents the preview values verbatim and waits for an explicit yes before re-calling with confirm=true; does not treat the user's original 'just send it' as satisfying the confirmation, and does not claim the invite was sent.",
+      "files": [],
+      "assertions": [
+        "Checks whether the company/person already exists in Compass (compass_list_legal_entities and/or compass_list_workflows) before inviting, citing the no-idempotency/duplicate-email risk",
+        "Presents the preview's exact email address and company name back to the user and asks for an explicit approval of those values",
+        "Does not re-call with confirm=true until after the user approves the previewed values in the conversation (the earlier 'just send it' is not treated as approval of the preview)",
+        "Never claims the invitation email was already sent while the confirmation is still pending"
+      ]
+    }
+  ]
+}
